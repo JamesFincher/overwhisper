@@ -30,6 +30,10 @@ let package = Package(
             resources: [
                 .process("Resources")
             ]
+        ),
+        .testTarget(
+            name: "OverwhisperTests",
+            dependencies: ["Overwhisper"]
         )
     ]
 )
