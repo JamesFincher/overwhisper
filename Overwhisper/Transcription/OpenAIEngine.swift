@@ -3,6 +3,7 @@ import Foundation
 struct OpenAIEngine: TranscriptionEngine {
     private let apiKey: String
     private let translateToEnglish: Bool
+    private let language: String
     private let customVocabulary: String
     private static let requestTimeoutSeconds: TimeInterval = 30
 
@@ -12,9 +13,10 @@ struct OpenAIEngine: TranscriptionEngine {
             : "https://api.openai.com/v1/audio/transcriptions"
     }
 
-    init(apiKey: String, translateToEnglish: Bool = false, customVocabulary: String = "") {
+    init(apiKey: String, translateToEnglish: Bool = false, language: String = "auto", customVocabulary: String = "") {
         self.apiKey = apiKey
         self.translateToEnglish = translateToEnglish
+        self.language = language
         self.customVocabulary = customVocabulary
     }
 
@@ -34,34 +36,12 @@ struct OpenAIEngine: TranscriptionEngine {
         request.setValue("Bearer \(apiKey)", forHTTPHeaderField: "Authorization")
         request.setValue("multipart/form-data; boundary=\(boundary)", forHTTPHeaderField: "Content-Type")
 
-        var body = Data()
-
-        // Add file field
-        body.append("--\(boundary)\r\n".data(using: .utf8)!)
-        body.append("Content-Disposition: form-data; name=\"file\"; filename=\"audio.wav\"\r\n".data(using: .utf8)!)
-        body.append("Content-Type: audio/wav\r\n\r\n".data(using: .utf8)!)
-        body.append(audioData)
-        body.append("\r\n".data(using: .utf8)!)
-
-        // Add model field
-        body.append("--\(boundary)\r\n".data(using: .utf8)!)
-        body.append("Content-Disposition: form-data; name=\"model\"\r\n\r\n".data(using: .utf8)!)
-        body.append("whisper-1\r\n".data(using: .utf8)!)
-
-        // Add response format field
-        body.append("--\(boundary)\r\n".data(using: .utf8)!)
-        body.append("Content-Disposition: form-data; name=\"response_format\"\r\n\r\n".data(using: .utf8)!)
-        body.append("json\r\n".data(using: .utf8)!)
-
-        // Add prompt field for custom vocabulary
-        if !customVocabulary.isEmpty {
-            body.append("--\(boundary)\r\n".data(using: .utf8)!)
-            body.append("Content-Disposition: form-data; name=\"prompt\"\r\n\r\n".data(using: .utf8)!)
-            body.append("\(customVocabulary)\r\n".data(using: .utf8)!)
-        }
-
-        // Close boundary
-        body.append("--\(boundary)--\r\n".data(using: .utf8)!)
+        let body = Self.makeMultipartBody(
+            audioData: audioData,
+            boundary: boundary,
+            language: requestLanguage,
+            customVocabulary: customVocabulary
+        )
 
         request.httpBody = body
 
@@ -85,6 +65,57 @@ struct OpenAIEngine: TranscriptionEngine {
         let transcriptionResponse = try JSONDecoder().decode(OpenAITranscriptionResponse.self, from: data)
 
         return transcriptionResponse.text.trimmingCharacters(in: .whitespacesAndNewlines)
+    }
+
+    private var requestLanguage: String? {
+        Self.resolvedRequestLanguage(language, translateToEnglish: translateToEnglish)
+    }
+
+    static func resolvedRequestLanguage(_ language: String, translateToEnglish: Bool) -> String? {
+        guard !translateToEnglish else { return nil }
+
+        let trimmedLanguage = language.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmedLanguage.isEmpty, trimmedLanguage != "auto" else { return nil }
+
+        return trimmedLanguage
+    }
+
+    static func makeMultipartBody(
+        audioData: Data,
+        boundary: String,
+        language: String?,
+        customVocabulary: String
+    ) -> Data {
+        var body = Data()
+
+        appendFileField(audioData, to: &body, boundary: boundary)
+        appendFormField(name: "model", value: "whisper-1", to: &body, boundary: boundary)
+        appendFormField(name: "response_format", value: "json", to: &body, boundary: boundary)
+
+        if let language {
+            appendFormField(name: "language", value: language, to: &body, boundary: boundary)
+        }
+
+        if !customVocabulary.isEmpty {
+            appendFormField(name: "prompt", value: customVocabulary, to: &body, boundary: boundary)
+        }
+
+        body.append("--\(boundary)--\r\n".data(using: .utf8)!)
+        return body
+    }
+
+    private static func appendFileField(_ audioData: Data, to body: inout Data, boundary: String) {
+        body.append("--\(boundary)\r\n".data(using: .utf8)!)
+        body.append("Content-Disposition: form-data; name=\"file\"; filename=\"audio.wav\"\r\n".data(using: .utf8)!)
+        body.append("Content-Type: audio/wav\r\n\r\n".data(using: .utf8)!)
+        body.append(audioData)
+        body.append("\r\n".data(using: .utf8)!)
+    }
+
+    private static func appendFormField(name: String, value: String, to body: inout Data, boundary: String) {
+        body.append("--\(boundary)\r\n".data(using: .utf8)!)
+        body.append("Content-Disposition: form-data; name=\"\(name)\"\r\n\r\n".data(using: .utf8)!)
+        body.append("\(value)\r\n".data(using: .utf8)!)
     }
 }
 

@@ -248,10 +248,11 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             }
             .store(in: &cancellables)
 
-        Publishers.CombineLatest3(
+        Publishers.CombineLatest4(
             appState.$openAIAPIKey.removeDuplicates(),
             appState.$translateToEnglish.removeDuplicates(),
-            appState.$customVocabulary.removeDuplicates()
+            appState.$customVocabulary.removeDuplicates(),
+            appState.$language.removeDuplicates()
         )
         .dropFirst()
         .sink { [weak self] _ in
@@ -513,6 +514,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         OpenAIEngine(
             apiKey: appState.openAIAPIKey,
             translateToEnglish: appState.translateToEnglish,
+            language: appState.language,
             customVocabulary: appState.customVocabulary
         )
     }
@@ -840,7 +842,12 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         showNotification(title: "Fallback", body: "Local transcription failed, trying cloud...")
 
         let started = Date()
-        let openAIEngine = OpenAIEngine(apiKey: appState.openAIAPIKey, translateToEnglish: appState.translateToEnglish, customVocabulary: appState.customVocabulary)
+        let openAIEngine = OpenAIEngine(
+            apiKey: appState.openAIAPIKey,
+            translateToEnglish: appState.translateToEnglish,
+            language: appState.language,
+            customVocabulary: appState.customVocabulary
+        )
 
         do {
             let text = try await openAIEngine.transcribe(audioURL: audioURL)
