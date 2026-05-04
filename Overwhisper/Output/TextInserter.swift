@@ -2,6 +2,51 @@ import AppKit
 
 class TextInserter {
 
+    private struct PasteboardSnapshot {
+        private struct Item {
+            let contentsByType: [(type: NSPasteboard.PasteboardType, data: Data)]
+        }
+
+        private let items: [Item]
+
+        init(pasteboard: NSPasteboard) {
+            items = pasteboard.pasteboardItems?.map { item in
+                Item(
+                    contentsByType: item.types.compactMap { type in
+                        guard let data = item.data(forType: type) else {
+                            return nil
+                        }
+                        return (type, data)
+                    }
+                )
+            } ?? []
+        }
+
+        func restore(to pasteboard: NSPasteboard) {
+            pasteboard.clearContents()
+
+            let pasteboardItems = items.compactMap { item -> NSPasteboardItem? in
+                guard !item.contentsByType.isEmpty else {
+                    return nil
+                }
+
+                let pasteboardItem = NSPasteboardItem()
+                for content in item.contentsByType {
+                    pasteboardItem.setData(content.data, forType: content.type)
+                }
+                return pasteboardItem
+            }
+
+            guard !pasteboardItems.isEmpty else {
+                return
+            }
+
+            if !pasteboard.writeObjects(pasteboardItems) {
+                AppLogger.system.error("Failed to restore previous clipboard contents")
+            }
+        }
+    }
+
     /// Check if accessibility permission is granted
     static func hasAccessibilityPermission() -> Bool {
         return AXIsProcessTrusted()
@@ -29,8 +74,8 @@ class TextInserter {
             return false
         }
 
-        // Save current clipboard contents
-        let previousContents = pasteboard.string(forType: .string)
+        // Save every current clipboard item/type so rich text, images, and file URLs survive auto-paste.
+        let previousContents = PasteboardSnapshot(pasteboard: pasteboard)
 
         // Copy transcription to clipboard
         pasteboard.clearContents()
@@ -39,33 +84,41 @@ class TextInserter {
         // Small delay to ensure clipboard is ready
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) { [weak self] in
             // Simulate Cmd+V
-            self?.simulatePaste()
+            let didPaste = self?.simulatePaste() ?? false
+
+            guard didPaste else {
+                AppLogger.system.warning("Paste failed - transcription left on clipboard")
+                return
+            }
 
             // Restore original clipboard after a delay
             DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
-                if let prev = previousContents {
-                    pasteboard.clearContents()
-                    pasteboard.setString(prev, forType: .string)
-                }
+                previousContents.restore(to: pasteboard)
             }
         }
 
         return true
     }
 
-    private func simulatePaste() {
+    private func simulatePaste() -> Bool {
         let script = """
             tell application "System Events"
                 keystroke "v" using command down
             end tell
             """
-        if let appleScript = NSAppleScript(source: script) {
-            var error: NSDictionary?
-            appleScript.executeAndReturnError(&error)
-            if let error = error {
-                AppLogger.system.error("AppleScript paste failed: \(error)")
-            }
+        guard let appleScript = NSAppleScript(source: script) else {
+            AppLogger.system.error("Failed to create AppleScript paste command")
+            return false
         }
+
+        var error: NSDictionary?
+        appleScript.executeAndReturnError(&error)
+        if let error = error {
+            AppLogger.system.error("AppleScript paste failed: \(error)")
+            return false
+        }
+
+        return true
     }
 
     // Alternative method using Accessibility API (more reliable in some apps)
