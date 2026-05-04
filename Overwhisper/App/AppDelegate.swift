@@ -691,19 +691,8 @@ class AppDelegate: NSObject, NSApplicationDelegate {
 
                 if !finalText.isEmpty {
                     appState.addTranscriptionHistory(finalText)
-                    let didPaste = textInserter.insertText(finalText)
-
-                    if didPaste {
-                        if appState.playSoundOnCompletion {
-                            NSSound(named: .init("Tink"))?.play()
-                        }
-                    } else {
-                        // Accessibility permission not granted - text is in clipboard
-                        showNotification(
-                            title: "Text Copied",
-                            body: "Accessibility permission needed for auto-paste. Text copied to clipboard - press Cmd+V to paste."
-                        )
-                    }
+                    let insertionResult = await textInserter.insertText(finalText)
+                    handleInsertionResult(insertionResult)
                 }
 
                 appState.recordingState = .idle
@@ -807,19 +796,9 @@ class AppDelegate: NSObject, NSApplicationDelegate {
 
             if !finalText.isEmpty {
                 appState.addTranscriptionHistory(finalText)
-                let didPaste = textInserter.insertText(finalText)
+                let insertionResult = await textInserter.insertText(finalText)
                 appState.addDebugLog("Cloud fallback succeeded", source: "Transcription")
-
-                if didPaste {
-                    if appState.playSoundOnCompletion {
-                        NSSound(named: .init("Tink"))?.play()
-                    }
-                } else {
-                    showNotification(
-                        title: "Text Copied",
-                        body: "Accessibility permission needed for auto-paste. Text copied to clipboard - press Cmd+V to paste."
-                    )
-                }
+                handleInsertionResult(insertionResult)
             }
 
             appState.recordingState = .idle
@@ -900,6 +879,17 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             errorMessage: errorMessage,
             usedCloudFallback: usedCloudFallback
         )
+    }
+
+    private func handleInsertionResult(_ result: TextInserter.InsertionResult) {
+        switch result {
+        case .pasted:
+            if appState.playSoundOnCompletion {
+                NSSound(named: .init("Tink"))?.play()
+            }
+        case .copiedToClipboard(let reason):
+            showNotification(title: "Text Copied", body: reason.notificationBody)
+        }
     }
 
     private func cancelRecording() {

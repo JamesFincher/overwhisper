@@ -1,6 +1,60 @@
 import AppKit
 
+@MainActor
 class TextInserter {
+    enum InsertionResult {
+        case pasted
+        case copiedToClipboard(CopyFallbackReason)
+    }
+
+    enum CopyFallbackReason {
+        case accessibilityPermissionMissing
+        case pasteFailed
+
+        var notificationBody: String {
+            switch self {
+            case .accessibilityPermissionMissing:
+                return "Accessibility permission needed for auto-paste. Text copied to clipboard - press Cmd+V to paste."
+            case .pasteFailed:
+                return "Auto-paste failed. Text copied to clipboard - press Cmd+V to paste."
+            }
+        }
+    }
+
+    private let pasteboardDelay: UInt64 = 100_000_000
+
+    private struct PasteboardSnapshot {
+        let items: [Item]
+
+        init(from pasteboard: NSPasteboard) {
+            items = pasteboard.pasteboardItems?.map(Item.init) ?? []
+        }
+
+        func restore(to pasteboard: NSPasteboard) {
+            pasteboard.clearContents()
+            guard !items.isEmpty else { return }
+            pasteboard.writeObjects(items.map { $0.pasteboardItem })
+        }
+
+        struct Item {
+            let values: [(type: NSPasteboard.PasteboardType, data: Data)]
+
+            init(item: NSPasteboardItem) {
+                values = item.types.compactMap { type in
+                    guard let data = item.data(forType: type) else { return nil }
+                    return (type, data)
+                }
+            }
+
+            var pasteboardItem: NSPasteboardItem {
+                let item = NSPasteboardItem()
+                for value in values {
+                    item.setData(value.data, forType: value.type)
+                }
+                return item
+            }
+        }
+    }
 
     /// Check if accessibility permission is granted
     static func hasAccessibilityPermission() -> Bool {
@@ -15,9 +69,9 @@ class TextInserter {
     }
 
     /// Insert text at the current cursor position
-    /// Returns true if auto-paste was attempted, false if text was only copied to clipboard
+    /// Returns whether auto-paste succeeded or text was left on the clipboard for manual paste.
     @discardableResult
-    func insertText(_ text: String) -> Bool {
+    func insertText(_ text: String) async -> InsertionResult {
         let pasteboard = NSPasteboard.general
 
         // Check accessibility permission before attempting paste
@@ -26,50 +80,65 @@ class TextInserter {
             pasteboard.clearContents()
             pasteboard.setString(text, forType: .string)
             AppLogger.system.warning("Accessibility permission not granted - text copied to clipboard only")
-            return false
+            return .copiedToClipboard(.accessibilityPermissionMissing)
         }
 
-        // Save current clipboard contents
-        let previousContents = pasteboard.string(forType: .string)
+        let previousContents = PasteboardSnapshot(from: pasteboard)
 
         // Copy transcription to clipboard
         pasteboard.clearContents()
         pasteboard.setString(text, forType: .string)
 
         // Small delay to ensure clipboard is ready
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) { [weak self] in
-            // Simulate Cmd+V
-            self?.simulatePaste()
-
-            // Restore original clipboard after a delay
-            DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
-                if let prev = previousContents {
-                    pasteboard.clearContents()
-                    pasteboard.setString(prev, forType: .string)
-                }
-            }
+        do {
+            try await Task.sleep(nanoseconds: pasteboardDelay)
+        } catch {
+            AppLogger.system.warning("Paste cancelled before Cmd+V was sent - text left on clipboard")
+            return .copiedToClipboard(.pasteFailed)
         }
 
-        return true
+        guard simulatePaste() else {
+            // Paste failed - keep transcription on the clipboard for manual paste.
+            return .copiedToClipboard(.pasteFailed)
+        }
+
+        // Restore original clipboard after paste has been reported as sent.
+        do {
+            try await Task.sleep(nanoseconds: pasteboardDelay)
+        } catch {
+            AppLogger.system.warning("Paste succeeded but clipboard restore was cancelled")
+            return .pasted
+        }
+
+        previousContents.restore(to: pasteboard)
+
+        return .pasted
     }
 
-    private func simulatePaste() {
+    private func simulatePaste() -> Bool {
         let script = """
             tell application "System Events"
                 keystroke "v" using command down
             end tell
             """
-        if let appleScript = NSAppleScript(source: script) {
-            var error: NSDictionary?
-            appleScript.executeAndReturnError(&error)
-            if let error = error {
-                AppLogger.system.error("AppleScript paste failed: \(error)")
-            }
+        guard let appleScript = NSAppleScript(source: script) else {
+            AppLogger.system.error("AppleScript paste failed: script could not be created")
+            return false
         }
+
+        var error: NSDictionary?
+        appleScript.executeAndReturnError(&error)
+        if let error = error {
+            AppLogger.system.error("AppleScript paste failed: \(error)")
+            return false
+        }
+
+        return true
     }
 
     // Alternative method using Accessibility API (more reliable in some apps)
-    func insertTextViaAccessibility(_ text: String) {
+    @discardableResult
+    func insertTextViaAccessibility(_ text: String) async -> InsertionResult {
         let systemWideElement = AXUIElementCreateSystemWide()
 
         var focusedElement: AnyObject?
@@ -81,8 +150,7 @@ class TextInserter {
 
         guard error == .success, let element = focusedElement else {
             // Fall back to clipboard method
-            insertText(text)
-            return
+            return await insertText(text)
         }
 
         // Try to set the value directly
@@ -94,7 +162,9 @@ class TextInserter {
 
         if setError != .success {
             // Fall back to clipboard method
-            insertText(text)
+            return await insertText(text)
         }
+
+        return .pasted
     }
 }
