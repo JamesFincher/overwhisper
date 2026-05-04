@@ -239,6 +239,19 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             }
             .store(in: &cancellables)
 
+        Publishers.CombineLatest3(
+            appState.$openAIAPIKey.removeDuplicates(),
+            appState.$translateToEnglish.removeDuplicates(),
+            appState.$customVocabulary.removeDuplicates()
+        )
+        .dropFirst()
+        .sink { [weak self] _ in
+            Task { @MainActor in
+                self?.refreshOpenAIEngineIfActive()
+            }
+        }
+        .store(in: &cancellables)
+
         appState.$recordingDurationLimitEnabled
             .dropFirst()
             .sink { [weak self] _ in
@@ -472,10 +485,25 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             transcriptionEngine = engine  // Assign first so it's available
             await engine.initialize()
         case .openAI:
-            transcriptionEngine = OpenAIEngine(apiKey: appState.openAIAPIKey, translateToEnglish: appState.translateToEnglish, customVocabulary: appState.customVocabulary)
+            transcriptionEngine = makeOpenAIEngine()
         }
 
         AppLogger.app.info("Engine initialization complete")
+    }
+
+    private func makeOpenAIEngine() -> OpenAIEngine {
+        OpenAIEngine(
+            apiKey: appState.openAIAPIKey,
+            translateToEnglish: appState.translateToEnglish,
+            customVocabulary: appState.customVocabulary
+        )
+    }
+
+    private func refreshOpenAIEngineIfActive() {
+        guard appState.transcriptionEngine == .openAI else { return }
+
+        transcriptionEngine = makeOpenAIEngine()
+        AppLogger.app.info("OpenAI engine settings refreshed")
     }
 
     private func handleHotkeyEvent(_ event: HotkeyEvent, mode: HotkeyMode) {
