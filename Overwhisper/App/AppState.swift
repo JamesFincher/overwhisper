@@ -53,13 +53,6 @@ enum RecordingState: Equatable {
     }
 }
 
-enum RecordingMode: String, CaseIterable, Identifiable {
-    case pushToTalk = "Push-to-Talk"
-    case toggle = "Toggle"
-
-    var id: String { rawValue }
-}
-
 enum OverlayPosition: String, CaseIterable, Identifiable {
     case topLeft = "Top Left"
     case topCenter = "Top Center"
@@ -263,9 +256,6 @@ class AppState: ObservableObject {
     @Published var recordingDuration: TimeInterval = 0.0
 
     // Settings
-    @Published var recordingMode: RecordingMode {
-        didSet { UserDefaults.standard.set(recordingMode.rawValue, forKey: "recordingMode") }
-    }
     @Published var overlayPosition: OverlayPosition {
         didSet { UserDefaults.standard.set(overlayPosition.rawValue, forKey: "overlayPosition") }
     }
@@ -384,9 +374,6 @@ class AppState: ObservableObject {
 
     init() {
         // Load settings from UserDefaults
-        let modeStr = UserDefaults.standard.string(forKey: "recordingMode") ?? RecordingMode.toggle.rawValue
-        self.recordingMode = RecordingMode(rawValue: modeStr) ?? .toggle
-
         let posStr = UserDefaults.standard.string(forKey: "overlayPosition") ?? OverlayPosition.bottomRight.rawValue
         self.overlayPosition = OverlayPosition(rawValue: posStr) ?? .bottomRight
 
@@ -521,7 +508,6 @@ class AppState: ObservableObject {
     }
 
     func resetToDefaults() {
-        recordingMode = .toggle
         overlayPosition = .bottomRight
         transcriptionEngine = .whisperKit
         whisperModel = .smallEn

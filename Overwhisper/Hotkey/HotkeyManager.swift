@@ -12,6 +12,11 @@ enum HotkeyMode {
     case pushToTalk
 }
 
+struct HotkeyRegistrationPlan: Equatable {
+    let registerToggle: Bool
+    let registerPushToTalk: Bool
+}
+
 @MainActor
 class HotkeyManager {
     private var toggleHotKey: HotKey?
@@ -31,8 +36,30 @@ class HotkeyManager {
     }
 
     func registerHotkeys() {
-        registerToggleHotkey(config: appState.toggleHotkeyConfig)
-        registerPushToTalkHotkey(config: appState.pushToTalkHotkeyConfig)
+        let plan = Self.registrationPlan(
+            toggleConfig: appState.toggleHotkeyConfig,
+            pushToTalkConfig: appState.pushToTalkHotkeyConfig
+        )
+
+        if plan.registerToggle {
+            registerToggleHotkey(config: appState.toggleHotkeyConfig)
+        } else {
+            toggleHotKey = nil
+        }
+
+        if plan.registerPushToTalk {
+            registerPushToTalkHotkey(config: appState.pushToTalkHotkeyConfig)
+        } else {
+            pushToTalkHotKey = nil
+            isPushToTalkKeyDown = false
+        }
+    }
+
+    nonisolated static func registrationPlan(toggleConfig: HotkeyConfig, pushToTalkConfig: HotkeyConfig) -> HotkeyRegistrationPlan {
+        HotkeyRegistrationPlan(
+            registerToggle: !toggleConfig.isEmpty,
+            registerPushToTalk: !pushToTalkConfig.isEmpty
+        )
     }
 
     func registerToggleHotkey(config: HotkeyConfig) {

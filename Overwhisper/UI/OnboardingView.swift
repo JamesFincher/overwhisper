@@ -109,17 +109,41 @@ struct OnboardingView: View {
             }
         case 2:
             VStack(alignment: .leading, spacing: 12) {
-                Text("Choose your preferred recording mode.")
-                Picker("Recording Mode", selection: $appState.recordingMode) {
-                    ForEach(RecordingMode.allCases) { mode in
-                        Text(mode.rawValue).tag(mode)
+                Text("Use either recording shortcut.")
+
+                VStack(alignment: .leading, spacing: 10) {
+                    HStack {
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text("Toggle")
+                                .fontWeight(.medium)
+                            Text("Press once to start, again to stop")
+                                .font(.caption)
+                                .foregroundColor(.secondary)
+                        }
+                        Spacer()
+                        Text(appState.toggleHotkeyConfig.displayString)
+                            .font(.system(.body, design: .monospaced))
+                            .foregroundColor(.secondary)
+                    }
+
+                    HStack {
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text("Push-to-Talk")
+                                .fontWeight(.medium)
+                            Text("Hold to record, release to transcribe")
+                                .font(.caption)
+                                .foregroundColor(.secondary)
+                        }
+                        Spacer()
+                        Text(appState.pushToTalkHotkeyConfig.displayString)
+                            .font(.system(.body, design: .monospaced))
+                            .foregroundColor(.secondary)
                     }
                 }
-                .pickerStyle(.radioGroup)
 
                 Divider().padding(.vertical, 8)
 
-                Text("You can fine-tune models, hotkeys, and output behavior in Settings.")
+                Text("You can change or disable shortcuts, models, and output behavior in Settings.")
                     .foregroundColor(.secondary)
 
                 HStack {
