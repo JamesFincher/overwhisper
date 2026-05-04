@@ -239,6 +239,34 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             }
             .store(in: &cancellables)
 
+        appState.$language
+            .dropFirst()
+            .sink { [weak self] _ in
+                self?.reinitializeOpenAIEngineIfActive()
+            }
+            .store(in: &cancellables)
+
+        appState.$translateToEnglish
+            .dropFirst()
+            .sink { [weak self] _ in
+                self?.reinitializeOpenAIEngineIfActive()
+            }
+            .store(in: &cancellables)
+
+        appState.$customVocabulary
+            .dropFirst()
+            .sink { [weak self] _ in
+                self?.reinitializeOpenAIEngineIfActive()
+            }
+            .store(in: &cancellables)
+
+        appState.$openAIAPIKey
+            .dropFirst()
+            .sink { [weak self] _ in
+                self?.reinitializeOpenAIEngineIfActive()
+            }
+            .store(in: &cancellables)
+
         appState.$recordingDurationLimitEnabled
             .dropFirst()
             .sink { [weak self] _ in
@@ -472,10 +500,23 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             transcriptionEngine = engine  // Assign first so it's available
             await engine.initialize()
         case .openAI:
-            transcriptionEngine = OpenAIEngine(apiKey: appState.openAIAPIKey, translateToEnglish: appState.translateToEnglish, customVocabulary: appState.customVocabulary)
+            transcriptionEngine = OpenAIEngine(
+                apiKey: appState.openAIAPIKey,
+                translateToEnglish: appState.translateToEnglish,
+                language: appState.language,
+                customVocabulary: appState.customVocabulary
+            )
         }
 
         AppLogger.app.info("Engine initialization complete")
+    }
+
+    private func reinitializeOpenAIEngineIfActive() {
+        guard appState.transcriptionEngine == .openAI else { return }
+
+        Task { @MainActor in
+            await initializeTranscriptionEngine()
+        }
     }
 
     private func handleHotkeyEvent(_ event: HotkeyEvent, mode: HotkeyMode) {
@@ -780,7 +821,12 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         showNotification(title: "Fallback", body: "Local transcription failed, trying cloud...")
 
         let started = Date()
-        let openAIEngine = OpenAIEngine(apiKey: appState.openAIAPIKey, translateToEnglish: appState.translateToEnglish, customVocabulary: appState.customVocabulary)
+        let openAIEngine = OpenAIEngine(
+            apiKey: appState.openAIAPIKey,
+            translateToEnglish: appState.translateToEnglish,
+            language: appState.language,
+            customVocabulary: appState.customVocabulary
+        )
 
         do {
             let text = try await openAIEngine.transcribe(audioURL: audioURL)
