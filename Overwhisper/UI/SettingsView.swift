@@ -114,7 +114,7 @@ struct GeneralSettingsView: View {
                 VStack(alignment: .leading, spacing: 8) {
                     Text("Thanks for using Overwhisper! For issues and inquiries, please visit:")
                         .font(.callout)
-                    Link("github.com/OverseedAI/overwhisper", destination: URL(string: "https://github.com/OverseedAI/overwhisper")!)
+                    Link("github.com/JamesFincher/overwhisper", destination: URL(string: "https://github.com/JamesFincher/overwhisper")!)
                 }
                 .padding(.vertical, 4)
 

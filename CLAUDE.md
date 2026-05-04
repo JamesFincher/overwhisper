@@ -2,6 +2,10 @@
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
+## Repository Authority
+
+The canonical repository is `JamesFincher/overwhisper`. Use that repository for pushes, pull requests, releases, and Symphony workspace updates. Do not publish work to `OverseedAI/overwhisper`.
+
 ## Build Commands
 
 ```bash

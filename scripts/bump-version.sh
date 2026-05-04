@@ -35,9 +35,20 @@ git commit -m "Bump version to $VERSION"
 # Create and push tag
 git tag "v$VERSION"
 
-echo "Pushing commit and tag..."
-git push origin main
-git push origin "v$VERSION"
+CURRENT_BRANCH="$(git branch --show-current)"
+REMOTE="${RELEASE_REMOTE:-$(git config "branch.$CURRENT_BRANCH.remote" || true)}"
+REMOTE="${REMOTE:-origin}"
+REMOTE_URL="$(git remote get-url --push "$REMOTE" 2>/dev/null || git remote get-url "$REMOTE")"
+
+if echo "$REMOTE_URL" | grep -qi 'OverseedAI/overwhisper'; then
+    echo "Error: refusing to release to $REMOTE_URL"
+    echo "Set this checkout to use https://github.com/JamesFincher/overwhisper.git before releasing."
+    exit 1
+fi
+
+echo "Pushing commit and tag to $REMOTE ($REMOTE_URL)..."
+git push "$REMOTE" HEAD:main
+git push "$REMOTE" "v$VERSION"
 
 echo "Done! Version $VERSION released."
 echo "GitHub Actions 'Build and Release DMG' workflow should now trigger."

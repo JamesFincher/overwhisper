@@ -207,7 +207,7 @@ jobs:
           VERSION=${{ steps.version.outputs.version }}
           DMG_PATH="$PRODUCT_NAME-$VERSION.dmg"
           DMG_SIZE=$(stat -f%z "$DMG_PATH")
-          DOWNLOAD_URL="https://github.com/OverseedAI/overwhisper/releases/download/v$VERSION/$DMG_PATH"
+          DOWNLOAD_URL="https://github.com/${{ github.repository }}/releases/download/v$VERSION/$DMG_PATH"
           PUB_DATE=$(date -u +"%a, %d %b %Y %H:%M:%S +0000")
 
           # Create appcast item
@@ -261,7 +261,7 @@ jobs:
         run: |
           DMG_PATH="$PRODUCT_NAME-$VERSION.dmg"
           DMG_SIZE=$(stat -f%z "$DMG_PATH")
-          DOWNLOAD_URL="https://github.com/OverseedAI/overwhisper/releases/download/v$VERSION/$DMG_PATH"
+          DOWNLOAD_URL="https://github.com/${{ github.repository }}/releases/download/v$VERSION/$DMG_PATH"
           PUB_DATE=$(date -u +"%a, %d %b %Y %H:%M:%S +0000")
           ED_SIG=$(echo "$SPARKLE_SIGNATURE" | grep -o 'edSignature="[^"]*"' | cut -d'"' -f2)
 

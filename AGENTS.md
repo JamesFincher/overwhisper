@@ -2,6 +2,12 @@
 
 Repository guidance for Codex and other coding agents working on Overwhisper.
 
+## Repository Authority
+
+The canonical repository for this project is `JamesFincher/overwhisper`.
+Use `https://github.com/JamesFincher/overwhisper.git` for fetches, pushes, PRs, releases, and Symphony-created workspaces.
+Do not push branches, open PRs, tag releases, or publish release assets against `OverseedAI/overwhisper`.
+
 ## Project Overview
 
 Overwhisper is a native macOS 14+ menu bar app for voice transcription. It records audio through `AVAudioEngine`, transcribes with local WhisperKit by default, can fall back to OpenAI Whisper, and inserts text at the current cursor by using the clipboard plus a synthetic paste.
